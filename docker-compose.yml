@@ -1,5 +1,7 @@
 services:
   homecool:
+    # Local build:  build: .
+    # GHCR image:   image: ghcr.io/<owner>/homecool:latest
     build: .
     container_name: homecool
     restart: unless-stopped
