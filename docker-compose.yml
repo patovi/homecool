@@ -1,0 +1,23 @@
+services:
+  homecool:
+    build: .
+    container_name: homecool
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - homecool-data:/data
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - JWT_SECRET=CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_MIN32CHARS
+      - DB_PATH=/data/homecool.db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  homecool-data:
+    driver: local

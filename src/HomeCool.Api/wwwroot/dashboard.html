@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeCool – Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    requireAuth();
+    renderNav();
+
+    const user = getUser();
+
+    async function load() {
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <span style="color:var(--text-muted)">Hallo, ${user.name}! 👋</span>
+        </div>
+        <div id="stats" class="grid-4" style="margin-bottom:1rem"></div>
+        <div class="grid-2">
+          <div class="card" id="recent-consumptions">
+            <div class="card-title">Letzte Buchungen</div>
+            <div class="table-wrap"><table id="cons-table"></table></div>
+          </div>
+          <div class="card" id="stock-card">
+            <div class="card-title">Aktueller Bestand</div>
+            <div class="table-wrap"><table id="stock-table"></table></div>
+          </div>
+        </div>
+        ${isAdmin() ? '<div class="card"><div class="card-title">Offene Beträge</div><div class="table-wrap"><table id="balance-table"></table></div></div>' : ''}
+      `;
+
+      try {
+        const [stock, balances, consumptions] = await Promise.all([
+          api.reports.stock(),
+          api.reports.userBalance(),
+          api.consumptions.list()
+        ]);
+
+        // Stats
+        const totalStock = stock.reduce((s, p) => s + p.stock, 0);
+        const activeProducts = stock.filter(p => p.isActive).length;
+        const myBalance = balances.find(b => b.userId === user.id);
+        const totalOwed = balances.reduce((s, b) => s + Math.min(0, b.balance), 0);
+
+        document.getElementById('stats').innerHTML = `
+          <div class="stat-card">
+            <div class="value">${totalStock}</div>
+            <div class="label">Getränke im Kühlschrank</div>
+          </div>
+          <div class="stat-card">
+            <div class="value">${activeProducts}</div>
+            <div class="label">Aktive Produkte</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" style="color:${myBalance && myBalance.balance < 0 ? 'var(--danger)' : 'var(--success)'}">${myBalance ? fmt(myBalance.balance) : '—'}</div>
+            <div class="label">Dein Saldo</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" style="color:var(--danger)">${fmt(Math.abs(totalOwed))}</div>
+            <div class="label">Gesamt ausstehend</div>
+          </div>
+        `;
+
+        // Recent consumptions
+        const recent = consumptions.slice(0, 8);
+        document.getElementById('cons-table').innerHTML = `
+          <thead><tr><th>Wer</th><th>Produkt</th><th>Menge</th><th>Summe</th><th>Wann</th></tr></thead>
+          <tbody>${recent.map(c => `
+            <tr>
+              <td>${c.userName}</td>
+              <td>${c.productName}</td>
+              <td>${c.quantity}x</td>
+              <td>${fmt(c.total)}</td>
+              <td>${fmtDatetime(c.consumedAt)}</td>
+            </tr>`).join('')}
+          </tbody>
+        `;
+
+        // Stock
+        document.getElementById('stock-table').innerHTML = `
+          <thead><tr><th>Produkt</th><th>Preis</th><th>Bestand</th></tr></thead>
+          <tbody>${stock.filter(p => p.isActive).map(p => `
+            <tr>
+              <td>${p.productName}</td>
+              <td>${fmt(p.price)}</td>
+              <td><span class="badge ${p.stock > 5 ? 'badge-green' : p.stock > 0 ? 'badge-yellow' : 'badge-red'}">${p.stock}</span></td>
+            </tr>`).join('')}
+          </tbody>
+        `;
+
+        // Balances (admin)
+        if (isAdmin() && document.getElementById('balance-table')) {
+          document.getElementById('balance-table').innerHTML = `
+            <thead><tr><th>Benutzer</th><th>Konsum</th><th>Gezahlt</th><th>Saldo</th></tr></thead>
+            <tbody>${balances.map(b => `
+              <tr>
+                <td>${b.userName}</td>
+                <td>${fmt(b.totalConsumed)}</td>
+                <td>${fmt(b.totalPaid)}</td>
+                <td class="${b.balance >= 0 ? 'balance-positive' : 'balance-negative'}">${fmt(b.balance)}</td>
+              </tr>`).join('')}
+            </tbody>
+          `;
+        }
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

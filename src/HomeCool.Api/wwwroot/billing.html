@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeCool – Abrechnung</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    requireAuth();
+    renderNav();
+
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+
+    async function load() {
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+        <div class="page-header">
+          <h1>Abrechnung</h1>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <select id="month-sel">${Array.from({length:12},(_,i)=>
+              `<option value="${i+1}" ${i+1===month?'selected':''}>${new Date(2000,i).toLocaleString('de-DE',{month:'long'})}</option>`
+            ).join('')}</select>
+            <select id="year-sel">${[now.getFullYear()-1, now.getFullYear()].map(y=>
+              `<option value="${y}" ${y===year?'selected':''}>${y}</option>`
+            ).join('')}</select>
+            <button class="btn btn-primary btn-sm" onclick="loadSummary()">Anzeigen</button>
+          </div>
+        </div>
+        <div id="alert" class="alert alert-error hidden"></div>
+
+        <div id="summary-area"></div>
+
+        ${isAdmin() ? `
+        <div class="card" style="margin-top:1rem">
+          <div class="card-title">Zahlung erfassen</div>
+          <div id="pay-alert" class="alert alert-error hidden"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Benutzer</label>
+              <select id="pay-user"></select>
+            </div>
+            <div class="form-group">
+              <label>Betrag (€)</label>
+              <input type="number" id="pay-amount" min="0.01" step="0.01" placeholder="10.00">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notiz (optional)</label>
+            <input type="text" id="pay-note" placeholder="Überweisung, Bar, ...">
+          </div>
+          <button class="btn btn-success" onclick="addPayment()">+ Zahlung speichern</button>
+        </div>
+
+        <div class="card" style="margin-top:1rem">
+          <div class="card-title">Zahlungshistorie</div>
+          <div class="table-wrap"><table id="payment-table"></table></div>
+        </div>` : ''}
+      `;
+
+      if (isAdmin()) {
+        try {
+          const users = await api.users.list();
+          const sel = document.getElementById('pay-user');
+          sel.innerHTML = users.filter(u => u.isActive).map(u =>
+            `<option value="${u.id}">${u.name}</option>`
+          ).join('');
+          loadPayments();
+        } catch(e) {}
+      }
+
+      loadSummary();
+    }
+
+    async function loadSummary() {
+      year = parseInt(document.getElementById('year-sel').value);
+      month = parseInt(document.getElementById('month-sel').value);
+      const area = document.getElementById('summary-area');
+      area.innerHTML = '<div style="color:var(--text-muted);padding:1rem">Lade…</div>';
+      try {
+        const summary = await api.reports.monthlySummary(year, month);
+        const monthName = new Date(year, month-1).toLocaleString('de-DE', {month:'long'});
+
+        const exportUrl = isAdmin()
+          ? `<a href="${api.reports.exportCsv(year, month)}" class="btn btn-outline btn-sm" download>⬇ CSV Export</a>`
+          : '';
+
+        area.innerHTML = `
+          <div class="card">
+            <div class="page-header" style="margin-bottom:.75rem">
+              <div class="card-title" style="margin:0">${monthName} ${year}</div>
+              ${exportUrl}
+            </div>
+            ${summary.rows.length === 0 ? '<p style="color:var(--text-muted)">Keine Buchungen in diesem Monat.</p>' : `
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Benutzer</th><th>Konsum</th><th>Gezahlt</th><th>Saldo</th></tr>
+                </thead>
+                <tbody>
+                  ${summary.rows.map(r => `
+                    <tr>
+                      <td><strong>${r.userName}</strong></td>
+                      <td>${fmt(r.totalConsumed)}</td>
+                      <td>${fmt(r.totalPaid)}</td>
+                      <td class="${r.balance >= 0 ? 'balance-positive' : 'balance-negative'}">${fmt(r.balance)}</td>
+                    </tr>`).join('')}
+                  <tr style="font-weight:700;background:#f8fafc">
+                    <td>Gesamt</td>
+                    <td>${fmt(summary.rows.reduce((s,r)=>s+r.totalConsumed,0))}</td>
+                    <td>${fmt(summary.rows.reduce((s,r)=>s+r.totalPaid,0))}</td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>`}
+          </div>
+        `;
+      } catch(err) {
+        showAlert(document.getElementById('alert'), err.message);
+      }
+    }
+
+    async function addPayment() {
+      const alert = document.getElementById('pay-alert');
+      try {
+        const userId = parseInt(document.getElementById('pay-user').value);
+        const amount = parseFloat(document.getElementById('pay-amount').value);
+        const note = document.getElementById('pay-note').value || null;
+        if (isNaN(amount) || amount <= 0) throw new Error('Bitte gültigen Betrag eingeben.');
+        await api.payments.create({ userId, amount, note });
+        showAlert(alert, '✓ Zahlung gespeichert!', 'success');
+        document.getElementById('pay-amount').value = '';
+        document.getElementById('pay-note').value = '';
+        loadPayments();
+        loadSummary();
+      } catch(err) {
+        showAlert(alert, err.message);
+      }
+    }
+
+    async function loadPayments() {
+      const payments = await api.payments.list();
+      document.getElementById('payment-table').innerHTML = `
+        <thead><tr><th>Datum</th><th>Benutzer</th><th>Betrag</th><th>Notiz</th></tr></thead>
+        <tbody>${payments.slice(0,20).map(p=>`
+          <tr>
+            <td>${fmtDate(p.paidAt)}</td>
+            <td>${p.userName}</td>
+            <td>${fmt(p.amount)}</td>
+            <td>${p.note || '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      `;
+    }
+
+    load();
+  </script>
+</body>
+</html>

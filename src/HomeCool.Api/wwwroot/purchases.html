@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeCool – Einkauf erfassen</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    requireAdmin();
+    renderNav();
+
+    let products = [];
+    let items = [];
+
+    async function load() {
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+        <div class="page-header"><h1>Einkauf erfassen</h1></div>
+        <div id="alert" class="alert alert-error hidden"></div>
+
+        <div class="card">
+          <div class="card-title">Neue Position hinzufügen</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Produkt</label>
+              <select id="prod-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Menge (Stück)</label>
+              <input type="number" id="qty" min="1" value="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Einkaufspreis pro Stück (€)</label>
+              <input type="number" id="unit-cost" min="0.01" step="0.01" placeholder="0.85">
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end">
+              <button class="btn btn-primary btn-block" onclick="addItem()">+ Position hinzufügen</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Positionen</div>
+          <div id="items-list"><p style="color:var(--text-muted);padding:.5rem 0">Noch keine Positionen hinzugefügt.</p></div>
+          <div id="total-line" class="hidden" style="text-align:right;font-size:1.1rem;font-weight:700;padding-top:.75rem;border-top:1px solid var(--border)"></div>
+        </div>
+
+        <div class="card">
+          <div class="form-group">
+            <label>Notiz (optional)</label>
+            <input type="text" id="note" placeholder="z.B. Wocheneinkauf REWE">
+          </div>
+          <button class="btn btn-success btn-lg btn-block" id="submit-btn" disabled onclick="submit()">
+            🛒 Einkauf speichern
+          </button>
+        </div>
+
+        <div class="card" style="margin-top:1rem">
+          <div class="card-title">Letzte Einkäufe</div>
+          <div class="table-wrap"><table id="history-table"></table></div>
+        </div>
+      `;
+
+      products = await api.products.list();
+      const sel = document.getElementById('prod-select');
+      sel.innerHTML = products.map(p => `<option value="${p.id}">${p.name} (${fmt(p.price)})</option>`).join('');
+
+      loadHistory();
+    }
+
+    function addItem() {
+      const prodId = parseInt(document.getElementById('prod-select').value);
+      const qty = parseInt(document.getElementById('qty').value);
+      const cost = parseFloat(document.getElementById('unit-cost').value);
+      const prod = products.find(p => p.id === prodId);
+
+      if (!prod || qty < 1 || isNaN(cost) || cost <= 0) {
+        showAlert(document.getElementById('alert'), 'Bitte alle Felder korrekt ausfüllen.');
+        return;
+      }
+
+      const existing = items.find(i => i.productId === prodId);
+      if (existing) {
+        existing.quantity += qty;
+        existing.unitCost = cost;
+      } else {
+        items.push({ productId: prodId, productName: prod.name, quantity: qty, unitCost: cost });
+      }
+      renderItems();
+    }
+
+    function removeItem(idx) {
+      items.splice(idx, 1);
+      renderItems();
+    }
+
+    function renderItems() {
+      const list = document.getElementById('items-list');
+      const totalLine = document.getElementById('total-line');
+      if (items.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-muted);padding:.5rem 0">Noch keine Positionen hinzugefügt.</p>';
+        totalLine.classList.add('hidden');
+        document.getElementById('submit-btn').disabled = true;
+        return;
+      }
+
+      let total = 0;
+      list.innerHTML = items.map((item, idx) => {
+        const subtotal = item.quantity * item.unitCost;
+        total += subtotal;
+        return `
+          <div class="item-row">
+            <span>${item.productName}</span>
+            <span>${item.quantity}x</span>
+            <span>${fmt(item.unitCost)}</span>
+            <button class="btn btn-danger btn-sm" onclick="removeItem(${idx})">✕</button>
+          </div>`;
+      }).join('');
+
+      totalLine.textContent = `Gesamt: ${fmt(total)}`;
+      totalLine.classList.remove('hidden');
+      document.getElementById('submit-btn').disabled = false;
+    }
+
+    async function submit() {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Speichere…';
+      try {
+        await api.purchases.create({
+          items: items.map(i => ({ productId: i.productId, quantity: i.quantity, unitCost: i.unitCost })),
+          note: document.getElementById('note').value || null
+        });
+        showAlert(document.getElementById('alert'), '✓ Einkauf gespeichert!', 'success');
+        items = [];
+        renderItems();
+        document.getElementById('note').value = '';
+        loadHistory();
+        // Refresh product list with updated prices
+        products = await api.products.list();
+      } catch (err) {
+        showAlert(document.getElementById('alert'), err.message);
+      }
+      btn.disabled = false;
+      btn.textContent = '🛒 Einkauf speichern';
+    }
+
+    async function loadHistory() {
+      const purchases = await api.purchases.list();
+      document.getElementById('history-table').innerHTML = `
+        <thead><tr><th>Datum</th><th>Positionen</th><th>Gesamtkosten</th><th>Notiz</th></tr></thead>
+        <tbody>${purchases.slice(0, 15).map(p => `
+          <tr>
+            <td>${fmtDate(p.date)}</td>
+            <td>${p.items.map(i => `${i.quantity}x ${i.productName}`).join(', ')}</td>
+            <td>${fmt(p.totalCost)}</td>
+            <td>${p.note || '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      `;
+    }
+
+    load();
+  </script>
+</body>
+</html>

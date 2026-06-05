@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeCool – Konsum buchen</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <script src="/js/api.js"></script>
+  <script src="/js/nav.js"></script>
+  <script>
+    requireAuth();
+    renderNav();
+
+    const user = getUser();
+    let products = [];
+    let users = [];
+    let selectedProduct = null;
+    let qty = 1;
+
+    async function load() {
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+        <div class="page-header">
+          <h1>Konsum buchen</h1>
+        </div>
+        <div id="alert" class="alert alert-error hidden"></div>
+
+        ${isAdmin() ? `
+        <div class="card">
+          <div class="card-title">Für wen?</div>
+          <div class="form-group">
+            <select id="user-select"></select>
+          </div>
+        </div>` : ''}
+
+        <div class="card">
+          <div class="card-title">Produkt wählen</div>
+          <div class="product-grid" id="product-grid"></div>
+        </div>
+
+        <div class="card hidden" id="booking-card">
+          <div class="card-title" id="booking-title"></div>
+          <div class="qty-control">
+            <button class="qty-btn" id="qty-minus">−</button>
+            <div class="qty-display" id="qty-display">1</div>
+            <button class="qty-btn" id="qty-plus">+</button>
+          </div>
+          <div style="text-align:center;color:var(--text-muted);margin-bottom:1rem" id="total-price"></div>
+          <div style="display:flex;gap:.75rem">
+            <button class="btn btn-outline" id="cancel-btn" style="flex:1">Abbrechen</button>
+            <button class="btn btn-success btn-lg" id="book-btn" style="flex:2">✓ Buchen</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem">
+          <div class="card-title">Letzte Buchungen</div>
+          <div class="table-wrap"><table id="history-table"></table></div>
+        </div>
+      `;
+
+      try {
+        [products, users] = await Promise.all([
+          api.products.list(true),
+          isAdmin() ? api.users.list() : Promise.resolve([])
+        ]);
+
+        if (isAdmin() && users.length) {
+          const sel = document.getElementById('user-select');
+          sel.innerHTML = users.filter(u => u.isActive).map(u =>
+            `<option value="${u.id}" ${u.id === user.id ? 'selected' : ''}>${u.name}</option>`
+          ).join('');
+        }
+
+        renderProducts();
+        loadHistory();
+
+        document.getElementById('qty-minus').addEventListener('click', () => {
+          if (qty > 1) { qty--; updateQty(); }
+        });
+        document.getElementById('qty-plus').addEventListener('click', () => {
+          qty++; updateQty();
+        });
+        document.getElementById('cancel-btn').addEventListener('click', () => {
+          selectedProduct = null;
+          qty = 1;
+          document.getElementById('booking-card').classList.add('hidden');
+        });
+        document.getElementById('book-btn').addEventListener('click', book);
+
+      } catch (err) {
+        showAlert(document.getElementById('alert'), err.message);
+      }
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('product-grid');
+      grid.innerHTML = products.map(p => `
+        <button class="product-btn ${p.stock <= 0 ? 'out-of-stock' : ''}" onclick="selectProduct(${p.id})">
+          <span class="emoji">${productEmoji(p.name)}</span>
+          <span class="p-name">${p.name}</span>
+          <span class="p-price">${fmt(p.price)}</span>
+          <span class="p-stock">${p.stock} verfügbar</span>
+        </button>
+      `).join('');
+    }
+
+    function selectProduct(id) {
+      selectedProduct = products.find(p => p.id === id);
+      if (!selectedProduct || selectedProduct.stock <= 0) return;
+      qty = 1;
+      document.getElementById('booking-card').classList.remove('hidden');
+      updateQty();
+      document.getElementById('booking-card').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function updateQty() {
+      document.getElementById('qty-display').textContent = qty;
+      document.getElementById('booking-title').textContent =
+        `${productEmoji(selectedProduct.name)} ${selectedProduct.name}`;
+      document.getElementById('total-price').textContent =
+        `${qty} × ${fmt(selectedProduct.price)} = ${fmt(qty * selectedProduct.price)}`;
+    }
+
+    async function book() {
+      const btn = document.getElementById('book-btn');
+      const alert = document.getElementById('alert');
+      const targetUserId = isAdmin()
+        ? parseInt(document.getElementById('user-select').value)
+        : user.id;
+
+      btn.disabled = true;
+      btn.textContent = 'Buche…';
+      try {
+        await api.consumptions.create({
+          userId: targetUserId,
+          productId: selectedProduct.id,
+          quantity: qty
+        });
+        showAlert(alert, `✓ ${qty}× ${selectedProduct.name} gebucht!`, 'success');
+        selectedProduct = null;
+        qty = 1;
+        document.getElementById('booking-card').classList.add('hidden');
+        products = await api.products.list(true);
+        renderProducts();
+        loadHistory();
+      } catch (err) {
+        showAlert(alert, err.message);
+      }
+      btn.disabled = false;
+      btn.textContent = '✓ Buchen';
+    }
+
+    async function loadHistory() {
+      try {
+        const targetUserId = isAdmin() ? null : user.id;
+        const cons = await api.consumptions.list(targetUserId);
+        document.getElementById('history-table').innerHTML = `
+          <thead><tr><th>Benutzer</th><th>Produkt</th><th>Menge</th><th>Preis</th><th>Gesamt</th><th>Zeit</th>${isAdmin() ? '<th></th>' : ''}</tr></thead>
+          <tbody>${cons.slice(0, 20).map(c => `
+            <tr>
+              <td>${c.userName}</td>
+              <td>${c.productName}</td>
+              <td>${c.quantity}x</td>
+              <td>${fmt(c.priceAtTime)}</td>
+              <td>${fmt(c.total)}</td>
+              <td>${fmtDatetime(c.consumedAt)}</td>
+              ${isAdmin() ? `<td><button class="btn btn-danger btn-sm" onclick="deleteConsumption(${c.id})">✕</button></td>` : ''}
+            </tr>`).join('')}
+          </tbody>
+        `;
+      } catch (e) { console.error(e); }
+    }
+
+    async function deleteConsumption(id) {
+      if (!confirm('Buchung wirklich löschen?')) return;
+      try {
+        await api.consumptions.delete(id);
+        products = await api.products.list(true);
+        renderProducts();
+        loadHistory();
+      } catch (err) {
+        showAlert(document.getElementById('alert'), err.message);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

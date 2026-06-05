@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeCool – Kiosk</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #0f172a; }
+
+    .kiosk-wrap {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem 1rem 2rem;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    .kiosk-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+      color: #fff;
+    }
+    .kiosk-logo { font-size: 1.4rem; font-weight: 800; letter-spacing: -.5px; }
+    .kiosk-back {
+      color: #94a3b8; font-size: .85rem; text-decoration: none;
+      display: flex; align-items: center; gap: .3rem;
+    }
+    .kiosk-back:hover { color: #fff; }
+
+    /* STEPS */
+    .step { display: none; width: 100%; }
+    .step.active { display: block; }
+
+    .step-title {
+      color: #fff; font-size: 1.3rem; font-weight: 700;
+      margin-bottom: 1.25rem; text-align: center;
+    }
+    .step-sub {
+      color: #94a3b8; font-size: .9rem; text-align: center; margin-top: -.75rem; margin-bottom: 1.25rem;
+    }
+
+    /* QR SCANNER */
+    .scanner-box {
+      width: 100%; aspect-ratio: 1;
+      border-radius: 16px; overflow: hidden;
+      background: #000; position: relative;
+      border: 2px solid #334155;
+    }
+    #qr-video { width: 100%; height: 100%; object-fit: cover; }
+    .scanner-overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    .scanner-frame {
+      width: 60%; aspect-ratio: 1;
+      border: 3px solid #3b82f6;
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.4);
+    }
+    .scanner-line {
+      position: absolute;
+      width: 60%; height: 2px;
+      background: #3b82f6;
+      animation: scan 2s ease-in-out infinite;
+    }
+    @keyframes scan {
+      0%   { top: 20%; opacity: 1; }
+      50%  { top: 78%; opacity: 1; }
+      100% { top: 20%; opacity: 1; }
+    }
+    .scanner-hint { color: #94a3b8; font-size: .85rem; text-align: center; margin-top: 1rem; }
+
+    /* PRODUCT GRID (manual fallback) */
+    .kiosk-product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: .75rem; width: 100%;
+    }
+    .kiosk-product-btn {
+      background: #1e293b; border: 2px solid #334155;
+      border-radius: 14px; padding: 1.25rem .75rem;
+      text-align: center; cursor: pointer;
+      transition: all .15s; display: flex; flex-direction: column;
+      align-items: center; gap: .4rem; color: #fff;
+    }
+    .kiosk-product-btn:hover, .kiosk-product-btn.selected {
+      border-color: #3b82f6; background: #1e3a5f;
+      transform: translateY(-2px);
+    }
+    .kiosk-product-btn.out { opacity: .35; cursor: not-allowed; pointer-events: none; }
+    .kiosk-product-btn .k-emoji { font-size: 2.2rem; }
+    .kiosk-product-btn .k-name { font-weight: 700; font-size: .95rem; }
+    .kiosk-product-btn .k-price { color: #60a5fa; font-weight: 700; font-size: 1rem; }
+    .kiosk-product-btn .k-stock { color: #64748b; font-size: .78rem; }
+
+    /* SELECTED PRODUCT BANNER */
+    .selected-banner {
+      background: #1e3a5f; border: 2px solid #3b82f6;
+      border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: 1rem; width: 100%;
+    }
+    .selected-banner .s-emoji { font-size: 2.5rem; }
+    .selected-banner .s-info { flex: 1; }
+    .selected-banner .s-name { color: #fff; font-weight: 700; font-size: 1.1rem; }
+    .selected-banner .s-price { color: #60a5fa; font-weight: 700; font-size: 1rem; }
+
+    /* USER SELECT */
+    .user-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: .6rem; width: 100%;
+    }
+    .user-btn {
+      background: #1e293b; border: 2px solid #334155;
+      border-radius: 12px; padding: 1rem .5rem;
+      text-align: center; cursor: pointer; color: #fff;
+      font-weight: 600; font-size: .95rem;
+      transition: all .15s;
+    }
+    .user-btn:hover, .user-btn.selected {
+      border-color: #3b82f6; background: #1e3a5f;
+    }
+    .user-avatar { font-size: 1.8rem; margin-bottom: .35rem; }
+
+    /* QTY */
+    .kiosk-qty {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.25rem; margin: 1.25rem 0; width: 100%;
+    }
+    .kiosk-qty-btn {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: #1e293b; border: 2px solid #334155;
+      color: #fff; font-size: 1.8rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .kiosk-qty-btn:hover { border-color: #3b82f6; background: #1e3a5f; }
+    .kiosk-qty-num {
+      font-size: 3rem; font-weight: 800; color: #fff;
+      min-width: 60px; text-align: center;
+    }
+
+    /* PIN PAD */
+    .pin-display {
+      display: flex; gap: .6rem; justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+    .pin-dot {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid #475569; background: transparent;
+      transition: background .1s;
+    }
+    .pin-dot.filled { background: #3b82f6; border-color: #3b82f6; }
+
+    .pin-pad {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: .6rem; width: 100%; max-width: 300px; margin: 0 auto;
+    }
+    .pin-key {
+      aspect-ratio: 1; border-radius: 14px;
+      background: #1e293b; border: 2px solid #334155;
+      color: #fff; font-size: 1.5rem; font-weight: 700;
+      cursor: pointer; transition: all .1s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pin-key:active { background: #1e3a5f; border-color: #3b82f6; transform: scale(.94); }
+    .pin-key.del { color: #94a3b8; font-size: 1.2rem; }
+    .pin-key.empty { background: transparent; border-color: transparent; cursor: default; }
+
+    /* SUMMARY */
+    .summary-card {
+      background: #1e293b; border-radius: 16px;
+      padding: 1.5rem; width: 100%; margin-bottom: 1.5rem;
+      border: 1px solid #334155;
+    }
+    .summary-row {
+      display: flex; justify-content: space-between;
+      color: #94a3b8; font-size: .95rem; margin-bottom: .5rem;
+    }
+    .summary-row.total {
+      color: #fff; font-size: 1.2rem; font-weight: 700;
+      border-top: 1px solid #334155; padding-top: .75rem;
+      margin-top: .25rem;
+    }
+
+    /* SUCCESS */
+    .success-box {
+      text-align: center; padding: 2rem 1rem;
+    }
+    .success-icon { font-size: 5rem; margin-bottom: 1rem; }
+    .success-msg { color: #fff; font-size: 1.4rem; font-weight: 700; margin-bottom: .5rem; }
+    .success-sub { color: #94a3b8; font-size: .95rem; }
+
+    /* BUTTONS */
+    .kiosk-btn {
+      width: 100%; padding: 1.1rem; border-radius: 14px;
+      border: none; font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; transition: all .15s; margin-top: .5rem;
+    }
+    .kiosk-btn-primary { background: #2563eb; color: #fff; }
+    .kiosk-btn-primary:hover { background: #1d4ed8; }
+    .kiosk-btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+    .kiosk-btn-ghost { background: #1e293b; color: #94a3b8; border: 1.5px solid #334155; }
+    .kiosk-btn-ghost:hover { color: #fff; border-color: #475569; }
+
+    /* ALERT */
+    .kiosk-alert {
+      background: #7f1d1d; color: #fca5a5;
+      border-radius: 10px; padding: .85rem 1rem;
+      font-size: .9rem; text-align: center;
+      margin-bottom: 1rem; display: none;
+    }
+
+    /* DIVIDER */
+    .or-divider {
+      display: flex; align-items: center; gap: .75rem;
+      color: #475569; font-size: .8rem; margin: 1rem 0; width: 100%;
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="kiosk-wrap">
+    <div class="kiosk-header">
+      <span class="kiosk-logo">🧊 HomeCool</span>
+      <a href="/dashboard.html" class="kiosk-back">← App</a>
+    </div>
+
+    <div id="kiosk-alert" class="kiosk-alert"></div>
+
+    <!-- STEP 1: PRODUKT WÄHLEN -->
+    <div class="step active" id="step-product">
+      <div class="step-title">Was möchtest du nehmen?</div>
+
+      <button class="kiosk-btn kiosk-btn-primary" id="scan-btn" onclick="startScan()" style="margin-bottom:1rem">
+        📷 QR-Code scannen
+      </button>
+
+      <div id="scanner-area" style="display:none;width:100%;margin-bottom:1rem">
+        <div class="scanner-box">
+          <video id="qr-video" playsinline></video>
+          <div class="scanner-overlay">
+            <div class="scanner-frame"></div>
+            <div class="scanner-line"></div>
+          </div>
+        </div>
+        <p class="scanner-hint">Halte den QR-Code des Produkts in den Rahmen</p>
+        <button class="kiosk-btn kiosk-btn-ghost" onclick="stopScan()" style="margin-top:.75rem">Abbrechen</button>
+      </div>
+
+      <div class="or-divider" id="or-div">oder manuell wählen</div>
+
+      <div class="kiosk-product-grid" id="product-grid"></div>
+    </div>
+
+    <!-- STEP 2: BENUTZER + MENGE -->
+    <div class="step" id="step-user">
+      <div id="selected-banner-wrap"></div>
+
+      <div class="step-title" style="margin-bottom:.25rem">Wer bist du?</div>
+      <div class="step-sub">Tippe auf deinen Namen</div>
+
+      <div class="user-grid" id="user-grid"></div>
+
+      <div style="margin-top:1.5rem;width:100%">
+        <div style="color:#94a3b8;font-size:.9rem;text-align:center;margin-bottom:.5rem">Menge</div>
+        <div class="kiosk-qty">
+          <button class="kiosk-qty-btn" id="qty-minus">−</button>
+          <div class="kiosk-qty-num" id="qty-num">1</div>
+          <button class="kiosk-qty-btn" id="qty-plus">+</button>
+        </div>
+      </div>
+
+      <button class="kiosk-btn kiosk-btn-primary" id="next-to-pin" disabled onclick="goToPin()">
+        Weiter →
+      </button>
+      <button class="kiosk-btn kiosk-btn-ghost" onclick="goTo('step-product')" style="margin-top:.5rem">
+        ← Zurück
+      </button>
+    </div>
+
+    <!-- STEP 3: PIN -->
+    <div class="step" id="step-pin">
+      <div class="step-title" id="pin-title">PIN eingeben</div>
+      <div class="step-sub" id="pin-sub"></div>
+
+      <div class="summary-card" id="pin-summary"></div>
+
+      <div class="pin-display" id="pin-display">
+        <div class="pin-dot" id="pd0"></div>
+        <div class="pin-dot" id="pd1"></div>
+        <div class="pin-dot" id="pd2"></div>
+        <div class="pin-dot" id="pd3"></div>
+        <div class="pin-dot" id="pd4"></div>
+        <div class="pin-dot" id="pd5"></div>
+      </div>
+
+      <div class="pin-pad">
+        <button class="pin-key" onclick="pinKey('1')">1</button>
+        <button class="pin-key" onclick="pinKey('2')">2</button>
+        <button class="pin-key" onclick="pinKey('3')">3</button>
+        <button class="pin-key" onclick="pinKey('4')">4</button>
+        <button class="pin-key" onclick="pinKey('5')">5</button>
+        <button class="pin-key" onclick="pinKey('6')">6</button>
+        <button class="pin-key" onclick="pinKey('7')">7</button>
+        <button class="pin-key" onclick="pinKey('8')">8</button>
+        <button class="pin-key" onclick="pinKey('9')">9</button>
+        <button class="pin-key empty"></button>
+        <button class="pin-key" onclick="pinKey('0')">0</button>
+        <button class="pin-key del" onclick="pinDel()">⌫</button>
+      </div>
+
+      <button class="kiosk-btn kiosk-btn-primary" id="book-btn"
+              style="margin-top:1.5rem" onclick="book()" disabled>
+        ✓ Jetzt buchen
+      </button>
+      <button class="kiosk-btn kiosk-btn-ghost" onclick="goTo('step-user')" style="margin-top:.5rem">
+        ← Zurück
+      </button>
+    </div>
+
+    <!-- STEP 4: ERFOLG -->
+    <div class="step" id="step-success">
+      <div class="success-box">
+        <div class="success-icon">✅</div>
+        <div class="success-msg" id="success-msg">Gebucht!</div>
+        <div class="success-sub" id="success-sub"></div>
+      </div>
+      <button class="kiosk-btn kiosk-btn-primary" onclick="resetKiosk()">
+        Neue Buchung
+      </button>
+    </div>
+  </div>
+
+  <!-- jsQR via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    let kioskData = { users: [], products: [] };
+    let selected = { product: null, user: null, qty: 1 };
+    let pin = '';
+    let scanStream = null;
+    let scanAnimFrame = null;
+
+    // ─── INIT ────────────────────────────────────────────────
+    async function init() {
+      try {
+        const res = await fetch('/api/kiosk/data');
+        kioskData = await res.json();
+        renderProducts();
+        renderUsers();
+      } catch (e) {
+        showKioskAlert('Verbindungsfehler. Bitte Seite neu laden.');
+      }
+    }
+
+    function productEmoji(name) {
+      const n = name.toLowerCase();
+      if (n.includes('cola') || n.includes('softdrink')) return '🥤';
+      if (n.includes('bier') || n.includes('beer')) return '🍺';
+      if (n.includes('wasser') || n.includes('water')) return '💧';
+      if (n.includes('saft') || n.includes('juice')) return '🧃';
+      if (n.includes('kaffee') || n.includes('coffee')) return '☕';
+      if (n.includes('wein') || n.includes('wine')) return '🍷';
+      if (n.includes('energy')) return '⚡';
+      return '🍾';
+    }
+
+    function fmt(n) {
+      return Number(n).toFixed(2).replace('.', ',') + ' €';
+    }
+
+    // ─── RENDER ──────────────────────────────────────────────
+    function renderProducts() {
+      document.getElementById('product-grid').innerHTML =
+        kioskData.products.map(p => `
+          <button class="kiosk-product-btn ${p.stock <= 0 ? 'out' : ''}" onclick="selectProduct(${p.id})">
+            <span class="k-emoji">${productEmoji(p.name)}</span>
+            <span class="k-name">${p.name}</span>
+            <span class="k-price">${fmt(p.price)}</span>
+            <span class="k-stock">${p.stock > 0 ? p.stock + ' verfügbar' : 'Leer'}</span>
+          </button>`).join('');
+    }
+
+    function renderUsers() {
+      document.getElementById('user-grid').innerHTML =
+        kioskData.users.map(u => `
+          <button class="user-btn" id="ubtn-${u.id}" onclick="selectUser(${u.id})">
+            <div class="user-avatar">👤</div>
+            ${u.name}
+          </button>`).join('');
+    }
+
+    // ─── PRODUCT SELECTION ───────────────────────────────────
+    function selectProduct(id) {
+      selected.product = kioskData.products.find(p => p.id === id);
+      if (!selected.product) return;
+      stopScan();
+      selected.qty = 1;
+      selected.user = null;
+      pin = '';
+      updateQtyDisplay();
+
+      // Selected banner
+      document.getElementById('selected-banner-wrap').innerHTML = `
+        <div class="selected-banner">
+          <span class="s-emoji">${productEmoji(selected.product.name)}</span>
+          <div class="s-info">
+            <div class="s-name">${selected.product.name}</div>
+            <div class="s-price">${fmt(selected.product.price)} pro Stück</div>
+          </div>
+        </div>`;
+
+      // Reset user selection
+      document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
+      document.getElementById('next-to-pin').disabled = true;
+
+      goTo('step-user');
+    }
+
+    // ─── USER SELECTION ──────────────────────────────────────
+    function selectUser(id) {
+      selected.user = kioskData.users.find(u => u.id === id);
+      document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
+      document.getElementById(`ubtn-${id}`).classList.add('selected');
+      document.getElementById('next-to-pin').disabled = false;
+    }
+
+    // ─── QTY ─────────────────────────────────────────────────
+    document.getElementById('qty-minus').addEventListener('click', () => {
+      if (selected.qty > 1) { selected.qty--; updateQtyDisplay(); }
+    });
+    document.getElementById('qty-plus').addEventListener('click', () => {
+      selected.qty++;
+      updateQtyDisplay();
+    });
+
+    function updateQtyDisplay() {
+      document.getElementById('qty-num').textContent = selected.qty;
+    }
+
+    // ─── STEPS ───────────────────────────────────────────────
+    function goTo(stepId) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById(stepId).classList.add('active');
+    }
+
+    function goToPin() {
+      pin = '';
+      updatePinDisplay();
+      document.getElementById('book-btn').disabled = true;
+      document.getElementById('pin-title').textContent =
+        `PIN für ${selected.user.name}`;
+      document.getElementById('pin-sub').textContent = '';
+
+      const total = selected.qty * selected.product.price;
+      document.getElementById('pin-summary').innerHTML = `
+        <div class="summary-row"><span>Produkt</span><span>${selected.product.name}</span></div>
+        <div class="summary-row"><span>Benutzer</span><span>${selected.user.name}</span></div>
+        <div class="summary-row"><span>Menge</span><span>${selected.qty}×</span></div>
+        <div class="summary-row total"><span>Gesamt</span><span>${fmt(total)}</span></div>
+      `;
+      goTo('step-pin');
+    }
+
+    // ─── PIN PAD ─────────────────────────────────────────────
+    const MAX_PIN = 6;
+
+    function pinKey(digit) {
+      if (pin.length >= MAX_PIN) return;
+      pin += digit;
+      updatePinDisplay();
+      if (pin.length >= 4) {
+        document.getElementById('book-btn').disabled = false;
+      }
+    }
+
+    function pinDel() {
+      pin = pin.slice(0, -1);
+      updatePinDisplay();
+      if (pin.length < 4) {
+        document.getElementById('book-btn').disabled = true;
+      }
+    }
+
+    function updatePinDisplay() {
+      for (let i = 0; i < MAX_PIN; i++) {
+        const dot = document.getElementById(`pd${i}`);
+        dot.classList.toggle('filled', i < pin.length);
+      }
+    }
+
+    // ─── BOOK ─────────────────────────────────────────────────
+    async function book() {
+      const btn = document.getElementById('book-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Buche…';
+      hideKioskAlert();
+
+      try {
+        const res = await fetch('/api/kiosk/book', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: selected.user.id,
+            productId: selected.product.id,
+            quantity: selected.qty,
+            pin: pin
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fehler beim Buchen');
+
+        document.getElementById('success-msg').textContent =
+          `${selected.qty}× ${data.productName} gebucht! `;
+        document.getElementById('success-sub').textContent =
+          `${data.userName} · ${fmt(data.total)} · Prost! 🥂`;
+
+        goTo('step-success');
+
+        // Auto-reset after 5s
+        setTimeout(resetKiosk, 5000);
+
+      } catch (err) {
+        showKioskAlert(err.message);
+        pin = '';
+        updatePinDisplay();
+        document.getElementById('book-btn').disabled = true;
+      }
+      btn.textContent = '✓ Jetzt buchen';
+    }
+
+    function resetKiosk() {
+      selected = { product: null, user: null, qty: 1 };
+      pin = '';
+      stopScan();
+      init(); // Refresh stock
+      goTo('step-product');
+    }
+
+    // ─── QR SCANNER ──────────────────────────────────────────
+    async function startScan() {
+      document.getElementById('scanner-area').style.display = 'block';
+      document.getElementById('scan-btn').style.display = 'none';
+      document.getElementById('or-div').style.display = 'none';
+
+      try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        const video = document.getElementById('qr-video');
+        video.srcObject = scanStream;
+        await video.play();
+        scanFrame();
+      } catch (e) {
+        showKioskAlert('Kamera nicht verfügbar. Bitte Produkt manuell wählen.');
+        stopScan();
+      }
+    }
+
+    function stopScan() {
+      if (scanStream) {
+        scanStream.getTracks().forEach(t => t.stop());
+        scanStream = null;
+      }
+      if (scanAnimFrame) {
+        cancelAnimationFrame(scanAnimFrame);
+        scanAnimFrame = null;
+      }
+      document.getElementById('scanner-area').style.display = 'none';
+      document.getElementById('scan-btn').style.display = 'block';
+      document.getElementById('or-div').style.display = 'flex';
+    }
+
+    function scanFrame() {
+      const video = document.getElementById('qr-video');
+      if (!scanStream || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        scanAnimFrame = requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = typeof jsQR !== 'undefined'
+        ? jsQR(imageData.data, imageData.width, imageData.height)
+        : null;
+
+      if (code) {
+        const raw = code.data.trim();
+        // Support: plain product ID ("3"), or URL with ?product=3
+        let productId = null;
+        const urlMatch = raw.match(/[?&]product=(\d+)/);
+        if (urlMatch) productId = parseInt(urlMatch[1]);
+        else if (/^\d+$/.test(raw)) productId = parseInt(raw);
+
+        if (productId) {
+          const found = kioskData.products.find(p => p.id === productId);
+          if (found && found.stock > 0) {
+            selectProduct(found.id);
+            return;
+          } else {
+            showKioskAlert(found ? 'Produkt ist leider leer.' : 'Unbekanntes Produkt.');
+          }
+        } else {
+          showKioskAlert('QR-Code nicht erkannt.');
+        }
+        stopScan();
+        return;
+      }
+
+      scanAnimFrame = requestAnimationFrame(scanFrame);
+    }
+
+    // ─── ALERTS ──────────────────────────────────────────────
+    function showKioskAlert(msg) {
+      const el = document.getElementById('kiosk-alert');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 4000);
+    }
+    function hideKioskAlert() {
+      document.getElementById('kiosk-alert').style.display = 'none';
+    }
+
+    init();
+  </script>
+</body>
+</html>

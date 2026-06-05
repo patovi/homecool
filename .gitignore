@@ -1,0 +1,10 @@
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+bin/
+obj/
+.env
+*.user
+.vs/
+.idea/
