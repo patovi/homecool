@@ -40,6 +40,13 @@ public static class ProductEndpoints
             return product is null ? Results.NotFound() : Results.Ok(product);
         }).RequireAuthorization("AdminOnly");
 
+        group.MapDelete("/{id:int}", async (int id, ProductService service) =>
+        {
+            var (success, error) = await service.DeleteAsync(id);
+            if (error is not null) return Results.BadRequest(new { error });
+            return success ? Results.NoContent() : Results.NotFound();
+        }).RequireAuthorization("AdminOnly");
+
         group.MapPatch("/{id:int}/stock", async (int id, AdjustStockRequest request, ProductService service) =>
         {
             var (product, error) = await service.AdjustStockAsync(id, request.Adjustment);

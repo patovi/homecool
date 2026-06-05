@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HomeCool – Produkte</title>
+  <link rel="icon" href="/homecool.png">
   <link rel="stylesheet" href="/css/style.css">
   <style>
     .qr-modal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 1.25rem; }
@@ -172,7 +173,10 @@
                 </div>
               </td>
               <td><span class="badge ${p.isActive ? 'badge-green' : 'badge-red'}">${p.isActive ? 'Aktiv' : 'Inaktiv'}</span></td>
-              <td><button class="btn btn-outline btn-sm" onclick="openProductModal(${p.id})">Bearbeiten</button></td>
+              <td style="white-space:nowrap">
+                <button class="btn btn-outline btn-sm" onclick="openProductModal(${p.id})">Bearbeiten</button>
+                <button class="btn btn-danger btn-sm" style="margin-left:.35rem" onclick="deleteProduct(${p.id})">Löschen</button>
+              </td>
             </tr>`).join('')}
         </tbody>
       `;
@@ -281,6 +285,17 @@
     }
 
     // ─── QR CODES ────────────────────────────────────────────
+    async function deleteProduct(id) {
+      const p = products.find(x => x.id === id);
+      if (!confirm(`Produkt "${p?.name}" wirklich löschen?\n\nNur möglich wenn noch keine Buchungen vorhanden sind.`)) return;
+      try {
+        await api.products.delete(id);
+        await refresh();
+      } catch (err) {
+        showAlert(document.getElementById('alert'), err.message);
+      }
+    }
+
     function openQrModal() {
       const grid = document.getElementById('qr-grid');
       grid.innerHTML = '';
@@ -292,11 +307,15 @@
         return;
       }
 
+      // Base URL from current browser origin – works automatically for local & server access
+      const baseUrl = window.location.origin;
+
       active.forEach(p => {
+        const kioskUrl = `${baseUrl}/kiosk.html?product=${p.id}`;
+
         const card = document.createElement('div');
         card.className = 'qr-card';
 
-        // qrcodejs needs a container div in the DOM before rendering
         const qrContainer = document.createElement('div');
         card.appendChild(qrContainer);
 
@@ -307,14 +326,13 @@
 
         const hint = document.createElement('div');
         hint.className = 'qr-hint';
-        hint.textContent = `ID: ${p.id} · ${fmt(p.price)}`;
+        hint.textContent = fmt(p.price);
         card.appendChild(hint);
 
         grid.appendChild(card);
 
-        // qrcodejs renders into the container (creates canvas or img inside)
         new QRCode(qrContainer, {
-          text: String(p.id),
+          text: kioskUrl,
           width: 160,
           height: 160,
           colorDark: '#000000',
@@ -338,7 +356,7 @@
         html += `<div class="qr-card">
           <img src="${imgSrc}" width="160" height="160" style="display:block;margin:0 auto">
           <div class="qr-name">${name}</div>
-          <div class="qr-hint">${hint}</div>
+          <div class="qr-hint">${hint} · Scannen zum Buchen</div>
         </div>`;
       });
 

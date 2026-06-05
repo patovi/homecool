@@ -50,6 +50,7 @@ const api = {
     get: (id) => apiFetch(`/products/${id}`),
     create: (data) => apiFetch('/products', { method: 'POST', body: JSON.stringify(data) }),
     update: (id, data) => apiFetch(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id) => apiFetch(`/products/${id}`, { method: 'DELETE' }),
     adjustStock: (id, adjustment) => apiFetch(`/products/${id}/stock`, { method: 'PATCH', body: JSON.stringify({ adjustment, note: null }) }),
   },
 

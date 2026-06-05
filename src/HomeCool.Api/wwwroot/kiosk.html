@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HomeCool – Kiosk</title>
+  <link rel="icon" href="/homecool.png">
   <link rel="stylesheet" href="/css/style.css">
   <style>
     body { background: #0f172a; }
@@ -636,7 +637,23 @@
       document.getElementById('kiosk-alert').style.display = 'none';
     }
 
-    init();
+    async function initWithUrlParam() {
+      await init();
+      const params = new URLSearchParams(window.location.search);
+      const productId = parseInt(params.get('product'));
+      if (productId) {
+        const found = kioskData.products.find(p => p.id === productId);
+        if (found && found.stock > 0) {
+          selectProduct(found.id);
+        } else if (found) {
+          showKioskAlert(`${found.name} ist leider leer.`);
+        } else {
+          showKioskAlert('Produkt nicht gefunden.');
+        }
+      }
+    }
+
+    initWithUrlParam();
   </script>
 </body>
 </html>
