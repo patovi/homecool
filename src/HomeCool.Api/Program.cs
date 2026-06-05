@@ -103,6 +103,7 @@ app.MapConsumptionEndpoints();
 app.MapPaymentEndpoints();
 app.MapReportEndpoints();
 app.MapKioskEndpoints();
+app.MapAdminEndpoints();
 
 // Health
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))

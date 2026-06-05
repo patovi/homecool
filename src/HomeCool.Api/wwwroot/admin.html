@@ -27,6 +27,15 @@
           <div class="table-wrap"><table id="users-table"></table></div>
         </div>
 
+        <div class="card" style="border:2px solid #fca5a5;margin-top:1.5rem">
+          <div class="card-title" style="color:var(--danger)">⚠️ Gefahrenzone</div>
+          <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1rem">
+            Löscht alle Transaktionen (Konsum, Einkäufe, Zahlungen) und setzt den Bestand aller Produkte auf 0.
+            <strong>Benutzer und Produkte bleiben erhalten.</strong>
+          </p>
+          <button class="btn btn-danger" onclick="clearDemoData()">🗑 Demodaten löschen</button>
+        </div>
+
         <div class="modal-overlay hidden" id="modal">
           <div class="modal">
             <div class="modal-header">
@@ -140,6 +149,17 @@
         await refresh();
       } catch(err) {
         showAlert(alert, err.message);
+      }
+    }
+
+    async function clearDemoData() {
+      if (!confirm('Wirklich alle Transaktionen und Bestände löschen?\nBenutzer und Produkte bleiben erhalten.\n\nDiese Aktion kann nicht rückgängig gemacht werden!')) return;
+      if (!confirm('Nochmal bestätigen: Alle Buchungen, Einkäufe und Zahlungen werden gelöscht.')) return;
+      try {
+        const res = await apiFetch('/admin/demo-data', { method: 'DELETE' });
+        showAlert(document.getElementById('alert'), '✓ ' + res.message, 'success');
+      } catch (err) {
+        showAlert(document.getElementById('alert'), err.message);
       }
     }
 

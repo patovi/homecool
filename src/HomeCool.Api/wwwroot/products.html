@@ -23,7 +23,7 @@
   </style>
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="/js/qrcode.min.js"></script>
   <script src="/js/api.js"></script>
   <script src="/js/nav.js"></script>
   <script>
@@ -293,12 +293,12 @@
       }
 
       active.forEach(p => {
-        // Build card with createElement only – no innerHTML +=
         const card = document.createElement('div');
         card.className = 'qr-card';
 
-        const canvas = document.createElement('canvas');
-        card.appendChild(canvas);
+        // qrcodejs needs a container div in the DOM before rendering
+        const qrContainer = document.createElement('div');
+        card.appendChild(qrContainer);
 
         const name = document.createElement('div');
         name.className = 'qr-name';
@@ -312,20 +312,27 @@
 
         grid.appendChild(card);
 
-        // Render QR after the canvas is in the DOM
-        QRCode.toCanvas(canvas, String(p.id), { width: 160, margin: 1, color: { dark: '#000', light: '#fff' } });
+        // qrcodejs renders into the container (creates canvas or img inside)
+        new QRCode(qrContainer, {
+          text: String(p.id),
+          width: 160,
+          height: 160,
+          colorDark: '#000000',
+          colorLight: '#ffffff'
+        });
       });
 
       document.getElementById('qr-modal').classList.remove('hidden');
     }
 
     function printQr() {
-      // Convert canvases to data-URLs before opening print window
       const cards = document.querySelectorAll('#qr-grid .qr-card');
       let html = '';
       cards.forEach(card => {
+        // qrcodejs creates canvas (modern) or img (fallback) inside the container div
         const canvas = card.querySelector('canvas');
-        const imgSrc = canvas ? canvas.toDataURL() : '';
+        const img = card.querySelector('img');
+        const imgSrc = canvas ? canvas.toDataURL() : (img ? img.src : '');
         const name = card.querySelector('.qr-name')?.textContent ?? '';
         const hint = card.querySelector('.qr-hint')?.textContent ?? '';
         html += `<div class="qr-card">
