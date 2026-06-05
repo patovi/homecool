@@ -24,7 +24,8 @@ public class AuthService(AppDbContext db, IConfiguration config)
 
     private string GenerateToken(int userId, string name, string role)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Secret"]!));
+        var secret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? config["Jwt:Secret"]!;
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
